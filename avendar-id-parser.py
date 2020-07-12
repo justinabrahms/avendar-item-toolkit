@@ -189,7 +189,8 @@ def get_objects__new_format(text):
                 if 'comments' not in current_object:
                     current_object['comments'] = []
                 current_object['comments'].append(line)
-        objects.add(Item(current_object))
+        if current_object.get('name'):
+            objects.add(Item(current_object))
     return objects
 
 
