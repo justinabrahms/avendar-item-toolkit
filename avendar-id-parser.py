@@ -266,13 +266,18 @@ def main(args):
         with open('./new-items.txt', 'r') as f:
             new_text = f.read()
             objects.extend(get_objects__new_format(new_text))
+
+    if path.exists('./more-new-items.txt'):
+        with open('./more-new-items.txt', 'r') as f:
+            new_text = f.read()
+            objects.extend(get_objects__new_format(new_text))
     
     if args.name is not None:
         return printItem(fetch_by_name(args.name, objects))
 
     if args.dump_highlights is not None:
-        for item in objects:
-            name = item.item.get('name')
+        for name in set([x.item.get('name') for x in objects]):
+            # name = item.item.get('name')
             if not name:
                 continue
             print("#highlight {%s} {dark orange}" % name)
