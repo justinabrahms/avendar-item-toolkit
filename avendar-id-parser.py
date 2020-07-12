@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from os import path
 import re
 from hashlib import sha256
 
@@ -255,13 +256,15 @@ def fetch_by_name(name, objects):
 def main(args):
     objects = []
 
-    with open('./old-items.txt', 'r') as f:
-        old_text = f.read()
-        objects.extend(get_objects__old_format(old_text))
+    if path.exists('./old-items.txt'):
+        with open('./old-items.txt', 'r') as f:
+            old_text = f.read()
+            objects.extend(get_objects__old_format(old_text))
 
-    with open('./new-items.txt', 'r') as f:
-        new_text = f.read()
-        objects.extend(get_objects__new_format(new_text))
+    if path.exists('./new-items.txt'):
+        with open('./new-items.txt', 'r') as f:
+            new_text = f.read()
+            objects.extend(get_objects__new_format(new_text))
     
     if args.name is not None:
         return printItem(fetch_by_name(args.name, objects))
