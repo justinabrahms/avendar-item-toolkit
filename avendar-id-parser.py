@@ -20,21 +20,42 @@ class Item(object):
         except:
             print(self.item)
 
-merge = lambda a, b: {**a,**b}
+def merge(left,right):
+    for k in right.keys():
+        if k in left:
+            if type(left[k]) != list:
+                left[k] = [left[k]]
+            left[k].append(right[k])
+        else:
+            left = {**left, **right}
+    return left
+
+dim = lambda x: f"\033[90m{x}\033[0m"
+
+def preprocess_line(line):
+    return line\
+        .strip()\
+        .replace('[22m', '')\
+        .replace('[38;5;130m', '')\
+        .replace('[0m', '')\
+        .replace('[1;37m', '')
+
 
 def get_objects__old_format(text):
     objects = []
     object_lines = []
     current_lines = []
     for line in text.splitlines():
-        if line.strip() != "":
+        line = preprocess_line(line)
+        if preprocess_line(line).strip() != "":
             current_lines.append(line)
         else:
             object_lines.append(current_lines)
             current_lines = []
     object_lines.append(current_lines)
 
-    name = re.compile(r"Object: '(?P<name>[\w -\\\']+)' is type (?P<armor_type>\w+).")
+
+    name = re.compile(r"Object: '(?P<name>[\w -\\\'\\\"]+)' is type (?P<armor_type>\w+).")
     weapon_type = re.compile("Weapon type is (?P<weapon_type>\w+).")
     damage = re.compile("Damage is (?P<dice_count>\d+)d(?P<dice_size>\d+) \(average (?P<avg>\d+)\).?")
     # @@@ check it parses negative stoo
@@ -95,7 +116,8 @@ def get_objects__new_format(text):
     current_lines = []
     for line in text.splitlines():
         line = line.strip('#')
-        if line.strip() == "":
+        line = preprocess_line(line)
+        if line == "":
             if current_lines != []:
                 object_lines.append(current_lines)
                 current_lines = []
@@ -135,7 +157,6 @@ def get_objects__new_format(text):
     weapon_flags = simple_str("Weapon flags")
     damage_type = simple_str("Damage type")
     damage_dice = re.compile(r'.*Damage(?: dice)?:\s+(?P<dice_count>\d+)d(?P<dice_size>\d+) \(average (?P<average>[\d.]+)\).*')
-    # damage_line = re.compile(r'.*Damage( dice)?:\s+(?P<dice_count>\d+)d(?P<dice_size>\d+) \(average (?P<average>[\d.]+)\).*')
     ac_pierce = re.compile(pipe_re("AC vs pierce", "ac_pierce", num_re), re.IGNORECASE)
     ac_bash =   re.compile(pipe_re("AC vs bash",   "ac_bash", num_re), re.IGNORECASE)
     ac_slash =  re.compile(pipe_re("AC vs slash" , "ac_slash", num_re), re.IGNORECASE)
@@ -145,7 +166,7 @@ def get_objects__new_format(text):
      # = simple_str("")
 
     regexen = [
-        name, weight, size, level, material, item_type, spell, flags, size,
+        name, weight, size, level, material, item_type, flags, spell, size,
         multiplier, capacity, wear, weapon_type, weapon_flags, damage_type,
         damage_dice, damage_dice, ac_pierce, ac_bash, ac_slash, ac_magic, ac_other,
         spell_mod, color, liquid, charges, hp_regen, mana_regen
@@ -156,7 +177,7 @@ def get_objects__new_format(text):
     affect_regexen = [affect, affect2]
 
     for obj_lines in object_lines:
-        current_object = {}
+        current_object = {'new_format': True}
 
         for line in obj_lines:
             if 'Object' in line:
@@ -164,11 +185,16 @@ def get_objects__new_format(text):
 
             if '+------' in line:
                 continue
+            elif '--+' in line:
+                continue
             elif '| -----'  in line:
                 continue
             found = False
             for regex in regexen:
                 if not found and regex.match(line):
+                    if 'Spell:' in line:
+                        # import pdb; pdb.set_trace()
+                        pass
                     current_object = merge(current_object, regex.match(line).groupdict())
                     found = True
 
@@ -180,6 +206,9 @@ def get_objects__new_format(text):
                     group = regex.match(line).groupdict()
                     current_object['affects'][group['stat']] = group['amount']
 
+            if current_object.get('flags', False) == 'none':
+                del current_object['flags']
+
             if not found:
                 if 'Effect' in line and 'Modifies' in line:
                     # '| Effect Modifies           Modifier  |'
@@ -190,7 +219,10 @@ def get_objects__new_format(text):
                     current_object['comments'] = []
                 current_object['comments'].append(line)
         if current_object.get('name'):
-            objects.add(Item(current_object))
+            try:
+                objects.add(Item(current_object))
+            except:
+                import pdb;pdb.set_trace()
     return objects
 
 
@@ -237,11 +269,39 @@ def best_items_with_affect(affect, limit=20, minimum=None, maximum=None):
 #     from pprint import pprint
 #     print(f"{item.item['name']}\n\t{item.item['affects']}\n\t{item.item.get('comments')}")
 
-def printItem(item):
+def printItem(item, debug=False):
     if item is None:
         return print('Not found')
     item = item.item
-    print(f"{item.get('name', {})}\n\tAffects: {item.get('affects')}\n\t{item.get('comments')}")
+    retval = f"{item.get('name', {})}  (New format? {item.get('new_format', False)})\n"
+    if item.get('comments'):
+        retval += f"\tComments: {item.get('comments')}\n"
+    if item.get('flags') is not None:
+        retval += dim(f"\tFlags: {item.get('flags')}\n")
+    if item.get('weight'):
+        retval += dim(f"\tWeight: {item.get('weight')}\n")
+    if item.get('avg') or item.get('average'):
+        count = item.get('dice_count')
+        size = item.get('dice_size')
+        retval += f"\tDice: {count}d{size} (Avg {item.get('avg') or item.get('average')})\n"
+        retval += dim(f"\tWeapon type: {item.get('weapon_type')}\n")
+        dtype = item.get('damage_type')
+        if dtype is not None:
+            retval += dim(f"\tDamage type: {dtype}\n")
+        wflags = item.get('weapon_flags')
+        if wflags is not None:
+            retval += dim(f"\tWeapon flags: {wflags}\n")
+    if item.get('comment'):
+        retval += f"\tComment: {item.get('comment')}\n"
+    if item.get('spell'):
+        retval += f"\tSpell: {item.get('spell')}\n"
+    affects = item.get('affects')
+    if affects is not None:
+        for key, val in affects.items():
+            retval += f"\t{key}: {val}\n"
+    if debug:
+        retval += 'Keys: %s\n' % ' '.join(item.keys())
+    print(retval)
 
 
 def fetch_by_name(name, objects):
@@ -253,8 +313,23 @@ def fetch_by_name(name, objects):
         return matches[0]
     return None
 
+def fuzzy_find_by_name(name, objects):
+    matches = []
+    for x in objects:
+        if name in x.item.get('name'):
+            matches.append(x)
+    if matches:
+        return matches
+    return None
+    
+
 
 def main(args):
+    if args.find is not None:
+        args.find = ' '.join(args.find)
+    if args.name is not None:
+        args.name = ' '.join(args.name)
+
     objects = []
 
     if path.exists('./old-items.txt'):
@@ -271,23 +346,30 @@ def main(args):
         with open('./more-new-items.txt', 'r') as f:
             new_text = f.read()
             objects.extend(get_objects__new_format(new_text))
+
+    objects.reverse() # newest first
     
     if args.name is not None:
-        return printItem(fetch_by_name(args.name, objects))
+        return printItem(fetch_by_name(args.name, objects), debug=args.debug)
+
+    if args.find is not None:
+        return [printItem(x, debug=args.debug) for x in fuzzy_find_by_name(args.find, objects)]
 
     if args.dump_highlights is not None:
         for name in set([x.item.get('name') for x in objects]):
             # name = item.item.get('name')
             if not name:
                 continue
-            print("#highlight {%s} {dark orange}" % name)
+            print("#highlight {%s} {orange}" % name)
 
         # return printItem(fetch_by_name(args.name, objects))
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', help='find item by name')
+    parser.add_argument('--name', help='find item by name', nargs='+')
+    parser.add_argument('--debug', help='print known properties when dumping item', action="store_true")
+    parser.add_argument('--find', help='fuzzy find item by name', nargs='+')
     parser.add_argument('--dump-highlights', action='store_const', const=True,
                         help='dump all known items into a highlights file for tt++')
 
