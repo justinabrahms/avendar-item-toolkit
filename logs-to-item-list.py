@@ -7,12 +7,14 @@ filenames = [join(logdir, f) for f in listdir(logdir) if isfile(join(logdir, f))
 lines = []
 
 for fname in filenames:
+    print("Reading: ", fname)
     with open(fname) as f:
         lines.extend(f.readlines())
 
 started = False
 object_lines = []
 current_lines = []
+
 for line in lines:
     if '+------' in line:
         if line.index('+') != 0:
@@ -26,14 +28,13 @@ for line in lines:
             current_lines = []
         else:
             started = True
-    elif '|' not in line:
+    # sometimes, the +---+ gets split across multiple lines.
+    elif '|' not in line and '-+' not in line:
         if started:
             started = False
             current_lines.append(line)
             object_lines.append(current_lines)
             current_lines = []
-        
-            
 
     if started:
         current_lines.append(line)
