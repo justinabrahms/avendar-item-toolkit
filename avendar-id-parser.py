@@ -2,228 +2,13 @@
 from os import path
 import re
 from hashlib import sha256
+from parse_old import get_objects__old_format
+from parse_new import get_objects__new_format
 
-
-class Item(object):
-    def __init__(self, item):
-        self.item = item
-
-    def __str__(self):
-        return self.item['name']
-
-    def __repr__(self):
-        return 'Item("' + self.item['name'] + '")'
-
-    def __hash__(self):
-        try:
-            return hash(self.item['name'])
-        except:
-            print(self.item)
-
-def merge(left,right):
-    for k in right.keys():
-        if k in left:
-            if type(left[k]) != list:
-                left[k] = [left[k]]
-            left[k].append(right[k])
-        else:
-            left = {**left, **right}
-    return left
 
 dim = lambda x: f"\033[90m{x}\033[0m"
 
-def preprocess_line(line):
-    return line\
-        .strip()\
-        .replace('[22m', '')\
-        .replace('[38;5;130m', '')\
-        .replace('[0m', '')\
-        .replace('[1;37m', '')
 
-
-def get_objects__old_format(text):
-    objects = []
-    object_lines = []
-    current_lines = []
-    for line in text.splitlines():
-        line = preprocess_line(line)
-        if preprocess_line(line).strip() != "":
-            current_lines.append(line)
-        else:
-            object_lines.append(current_lines)
-            current_lines = []
-    object_lines.append(current_lines)
-
-
-    name = re.compile(r"Object: '(?P<name>[\w -\\\'\\\"]+)' is type (?P<armor_type>\w+).")
-    weapon_type = re.compile("Weapon type is (?P<weapon_type>\w+).")
-    damage = re.compile("Damage is (?P<dice_count>\d+)d(?P<dice_size>\d+) \(average (?P<avg>\d+)\).?")
-    # @@@ check it parses negative stoo
-    affect = re.compile("Affects (?P<stat>[\w ]+) by (?P<amount>[\d-]+).?")
-    comment = re.compile(r"[/\\]+(?P<comment>.*)")
-    armor = re.compile("Armor class is (?P<pierce>\d+) pierce, (?P<bash>\d+) bash, (?P<slash>\d+) slash, and (?P<magic>\d+) vs. magic.")
-    extra_flags = re.compile("Extra flags (?P<flags>[\w -]+)")
-    material = re.compile("Material is (?P<material>\w+).")
-    weight = re.compile("Weight is (?P<weight>[\d.]+\d+), level is (?P<level>\d+).")
-    weapons_flags = re.compile("Weapons flags: (?P<weapon_flags>[\w-]+)")
-    spells = re.compile("Level (?P<level>\d+) spells of: (?P<spells>.*).")
-    charges = re.compile("Has (?P<charges>\d+) charges of level (?P<level>\d+) (?P<spell>.*).")
-    capacity = re.compile("Capacity: (?P<capacity>\d+)#? Maximum weight: (?P<max_weight>\d+)#? flags: (?P<container_flags>.*)")
-    weight_multi = re.compile("Weight multiplier: (?P<weight_multiplier>\d+)%")
-
-    regexen = [
-        name, weapon_type, damage, comment, armor, extra_flags, 
-        material, weight, weapons_flags, spells, charges, capacity,
-        weight_multi,
-    ]
-    special_regexen = [affect]
-
-    for lines in object_lines:
-        current_object = {}
-        for line in lines:
-            line = line.strip()
-            if 'You have become better at' in line:
-                continue
-            if "chant softly" in line:
-                continue
-            if "rush of knowledge" in line:
-                continue
-
-            found = False
-            for regex in regexen:
-                if not found and regex.match(line):
-                    current_object = merge(current_object, regex.match(line).groupdict())
-                    found = True
-
-            if affect.match(line):
-                found = True
-                if 'affects' not in current_object:
-                    current_object['affects'] = {}
-                group = affect.match(line).groupdict()
-                current_object['affects'][group['stat']] = group['amount']
-
-            if not found:
-                if 'comment' not in current_object:
-                    current_object['comment'] = []
-                current_object['comment'].append(line)
-        if current_object != {}:
-            objects.append(Item(current_object))
-    return objects
-
-def get_objects__new_format(text):
-    objects = set()
-    object_lines = []
-    current_lines = []
-    for line in text.splitlines():
-        line = line.strip('#')
-        line = preprocess_line(line)
-        if line == "":
-            if current_lines != []:
-                object_lines.append(current_lines)
-                current_lines = []
-            else:
-                continue
-        else:
-            # print("line: ", line)
-            # print(len(current_lines))
-            current_lines.append(line)
-    # And once more for the last one.
-    object_lines.append(current_lines)
-
-    num_re = r"[\d.]+"
-    pipe_re = lambda x,y,z: f".*{x}:\s+(?P<{y.replace(' ', '_')}>{z})\s+\|"
-    simple_number = lambda x: re.compile(pipe_re(x, x.lower(), num_re))
-    simple_str = lambda x: re.compile(pipe_re(x, x.lower(), r"[\w' -]+?"))
-    # pipe_re = lambda x, y, z: ".*"
-    name = re.compile(pipe_re( "Object", "name", r'[\w, "\'-]+?'))
-    weight = simple_number("Weight")
-    size = simple_number("Size")
-    level = simple_number("Level")
-    material = simple_str("Material")
-    item_type = simple_str("Type")
-    spell = simple_str("Spell")
-    spell_mod = simple_str("Spell Modifier")
-    flags = simple_str("Flags")
-    size = simple_str("Size")
-    capacity = simple_str("Capacity")
-    multiplier = simple_str("Multiplier")
-    wear = simple_str("Wear")
-    color = simple_str("Color")
-    liquid = simple_str("Liquid")
-    charges = simple_str("Charges")
-    hp_regen = simple_str("Hp regen")
-    mana_regen= simple_str("Mana regen")
-    weapon_type = re.compile(pipe_re("Weapon type", 'weapon_type', r'[\w, -/]+?'))
-    weapon_flags = simple_str("Weapon flags")
-    damage_type = simple_str("Damage type")
-    damage_dice = re.compile(r'.*Damage(?: dice)?:\s+(?P<dice_count>\d+)d(?P<dice_size>\d+) \(average (?P<average>[\d.]+)\).*')
-    ac_pierce = re.compile(pipe_re("AC vs pierce", "ac_pierce", num_re), re.IGNORECASE)
-    ac_bash =   re.compile(pipe_re("AC vs bash",   "ac_bash", num_re), re.IGNORECASE)
-    ac_slash =  re.compile(pipe_re("AC vs slash" , "ac_slash", num_re), re.IGNORECASE)
-    ac_magic =  re.compile(pipe_re("AC vs magic",  "ac_magic", num_re), re.IGNORECASE)
-    ac_other =  re.compile(pipe_re("AC vs other",  "ac_other", num_re), re.IGNORECASE)
-     # = simple_str("")
-     # = simple_str("")
-
-    regexen = [
-        name, weight, size, level, material, item_type, flags, spell, size,
-        multiplier, capacity, wear, weapon_type, weapon_flags, damage_type,
-        damage_dice, damage_dice, ac_pierce, ac_bash, ac_slash, ac_magic, ac_other,
-        spell_mod, color, liquid, charges, hp_regen, mana_regen
-    ]
-
-    affect = re.compile('.*Affects (?P<stat>[\w ]+) by (?P<amount>[\d-]+).*')
-    affect2 = re.compile('\| -\s+(?P<stat>[\w \(\)]+)\s+(?P<amount>[\d-]+)')
-    affect_regexen = [affect, affect2]
-
-    for obj_lines in object_lines:
-        current_object = {'new_format': True}
-
-        for line in obj_lines:
-            if 'Object' in line:
-                pass
-
-            if '+------' in line:
-                continue
-            elif '--+' in line:
-                continue
-            elif '| -----'  in line:
-                continue
-            found = False
-            for regex in regexen:
-                if not found and regex.match(line):
-                    if 'Spell:' in line:
-                        # import pdb; pdb.set_trace()
-                        pass
-                    current_object = merge(current_object, regex.match(line).groupdict())
-                    found = True
-
-            for regex in affect_regexen:
-                if regex.match(line):
-                    found = True
-                    if 'affects' not in current_object:
-                        current_object['affects'] = {}
-                    group = regex.match(line).groupdict()
-                    current_object['affects'][group['stat']] = group['amount']
-
-            if current_object.get('flags', False) == 'none':
-                del current_object['flags']
-
-            if not found:
-                if 'Effect' in line and 'Modifies' in line:
-                    # '| Effect Modifies           Modifier  |'
-                    continue
-                # if '//' not in line:
-                #     import pdb; pdb.set_trace()
-                if 'comments' not in current_object:
-                    current_object['comments'] = []
-                current_object['comments'].append(line)
-        if current_object.get('name'):
-            try:
-                objects.add(Item(current_object))
-            except:
-                import pdb;pdb.set_trace()
-    return objects
 
 
 from pprint import pprint
@@ -274,6 +59,8 @@ def printItem(item, debug=False):
         return print('Not found')
     item = item.item
     retval = f"{item.get('name', {})}  (New format? {item.get('new_format', False)})\n"
+    if item.get('level'):
+        retval += dim(f"\tLevel: {item.get('level')}\n")
     if item.get('comments'):
         retval += f"\tComments: {item.get('comments')}\n"
     if item.get('flags') is not None:
@@ -319,7 +106,7 @@ def fuzzy_find_by_name(name, objects):
         if name in x.item.get('name'):
             matches.append(x)
     if matches:
-        return matches
+        return set(matches)
     return None
     
 
@@ -353,7 +140,8 @@ def main(args):
         return printItem(fetch_by_name(args.name, objects), debug=args.debug)
 
     if args.find is not None:
-        return [printItem(x, debug=args.debug) for x in fuzzy_find_by_name(args.find, objects)]
+        items = sorted(fuzzy_find_by_name(args.find, objects))
+        return [printItem(x, debug=args.debug) for x in items]
 
     if args.dump_highlights is not None:
         for name in set([x.item.get('name') for x in objects]):
