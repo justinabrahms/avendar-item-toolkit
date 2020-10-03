@@ -26,7 +26,8 @@ def get_objects__new_format(text):
     simple_number = lambda x: re.compile(pipe_re(x, x.lower(), num_re))
     simple_str = lambda x: re.compile(pipe_re(x, x.lower(), r"[\w' -]+?"))
     # pipe_re = lambda x, y, z: ".*"
-    name = re.compile(pipe_re( "Object", "name", r'[\w, "\'-]+?'))
+    # name = re.compile(pipe_re( "Object", "name", r'[\w, "\'"-]+?'))
+    name = re.compile(pipe_re( "Object", "name", r'.*?'))
     weight = simple_number("Weight")
     size = simple_number("Size")
     level = simple_number("Level")
