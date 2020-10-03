@@ -23,8 +23,9 @@ def get_objects__old_format(text):
     comment = re.compile(r"[/\\]+(?P<comment>.*)")
     armor = re.compile("Armor class is (?P<pierce>\d+) pierce, (?P<bash>\d+) bash, (?P<slash>\d+) slash, and (?P<magic>\d+) vs. magic.")
     extra_flags = re.compile("Extra flags (?P<flags>[\w -]+)")
-    material = re.compile("Material is (?P<material>\w+).")
-    weight = re.compile("Weight is (?P<weight>[\d.]+\d+), level is (?P<level>\d+).")
+    material = re.compile("Material is (?P<material>\w+)\.?")
+    # Note: This explicitly excludes the 'value' param in lore. I don't think it's particularly useful to me
+    weight = re.compile("Weight is (?P<weight>[\d.]+\d+),.*? level is (?P<level>\d+)\.?")
     weapons_flags = re.compile("Weapons flags: (?P<weapon_flags>[\w-]+)")
     spells = re.compile("Level (?P<level>\d+) spells of: (?P<spells>.*).")
     charges = re.compile("Has (?P<charges>\d+) charges of level (?P<level>\d+) (?P<spell>.*).")
