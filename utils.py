@@ -31,7 +31,14 @@ class Item(object):
         return self.item['name'] == other.item['name']
 
     def __gt__(self, other):
-        return self.item['level'] > other.item['level']
+        mine = self.item['level']
+        theirs = other.item['level']
+        if isinstance(mine, list):
+            mine = mine[0]
+        if isinstance(theirs, list):
+            theirs = theirs[0]
+        
+        return int(mine) > int(theirs)
 
     def __hash__(self):
         try:
