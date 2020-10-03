@@ -17,7 +17,7 @@ from pprint import pprint
 
 
 
-def best_items_with_affect(affect, limit=20, minimum=None, maximum=None):
+def best_items_with_affect(objects, affect, limit=20, minimum=None, maximum=None):
     print("affect: ", affect)
     looking_for = set()
     for i in objects:
