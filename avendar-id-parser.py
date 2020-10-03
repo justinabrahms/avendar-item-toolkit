@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
 from os import path
 import re
-from hashlib import sha256
 from parse_old import get_objects__old_format
 from parse_new import get_objects__new_format
+import sys
 
 
 dim = lambda x: f"\033[90m{x}\033[0m"
 
-
-
-
 from pprint import pprint
 # print("Known: ", len(objects))
-
-
-
 
 def best_items_with_affect(objects, affect, limit=20, minimum=None, maximum=None):
     print("affect: ", affect)
@@ -112,27 +106,25 @@ def fuzzy_find_by_name(name, objects):
 
 
 def main(args):
+    if args.id_files is None:
+        print("You must specify files with the id info in them.", file=sys.stderr)
+        sys.exit(1)
+
     if args.find is not None:
         args.find = ' '.join(args.find)
     if args.name is not None:
         args.name = ' '.join(args.name)
 
     objects = []
+    for filename in args.id_files:
+        if path.exists(filename):
+            with open(filename, 'r') as f:
+                old_text = f.read()
+                objects.extend(get_objects__old_format(old_text))
+                objects.extend(get_objects__new_format(old_text))
 
-    if path.exists('./old-items.txt'):
-        with open('./old-items.txt', 'r') as f:
-            old_text = f.read()
-            objects.extend(get_objects__old_format(old_text))
 
-    if path.exists('./new-items.txt'):
-        with open('./new-items.txt', 'r') as f:
-            new_text = f.read()
-            objects.extend(get_objects__new_format(new_text))
 
-    if path.exists('./more-new-items.txt'):
-        with open('./more-new-items.txt', 'r') as f:
-            new_text = f.read()
-            objects.extend(get_objects__new_format(new_text))
 
     objects.reverse() # newest first
     
@@ -158,6 +150,7 @@ if __name__ == '__main__':
     parser.add_argument('--name', help='find item by name', nargs='+')
     parser.add_argument('--debug', help='print known properties when dumping item', action="store_true")
     parser.add_argument('--find', help='fuzzy find item by name', nargs='+')
+    parser.add_argument('--id-files', help='files with raw items in them', nargs="+")
     parser.add_argument('--dump-highlights', action='store_const', const=True,
                         help='dump all known items into a highlights file for tt++')
 
